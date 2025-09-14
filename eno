@@ -1,0 +1,48 @@
+#property version   "1.00"
+#property strict
+
+input ENUM_TIMEFRAMES TF      = PERIOD_M1;
+input int    LookbackBars     = 20;
+input double VolumeMultiplier = 3.0;
+input bool   UseEmailNotif    = true;
+input bool   UsePushNotif     = true;
+input bool   UseAlerts        = true;
+input string TargetEmail      = "example@gmail.com";  // ganti dengan alamat email yg akan menerima notifikasi
+datetime lastAlertTime = 0;
+
+void NotifyEvent(string subject, string body)
+  {
+   string fullBody = "Target Email: " + TargetEmail + "\n" + body;
+   if(UseEmailNotif) SendMail(subject, fullBody);
+   if(UsePushNotif) SendNotification(subject+"\n"+fullBody);
+   if(UseAlerts) Alert(subject+"\n"+fullBody);
+   Print(subject," | ",fullBody);
+  }
+
+void OnTick()
+  {
+   static datetime lastBarTime=0;
+   MqlRates rates[];
+   if(CopyRates(_Symbol, TF, 0, LookbackBars+1, rates) <= LookbackBars) return;
+   ArraySetAsSeries(rates,true);
+   datetime curBarTime = rates[0].time;
+   if(curBarTime == lastBarTime) return;
+   lastBarTime = curBarTime;
+   double sum=0;
+   for(int i=1;i<=LookbackBars;i++)
+      sum += rates[i].tick_volume;
+   double avg = sum / LookbackBars;
+   double curVol = rates[0].tick_volume;
+   if(curVol >= avg * VolumeMultiplier)
+     {
+      if(curBarTime != lastAlertTime)
+        {
+         lastAlertTime = curBarTime;
+         string subject = "🐋 Whale Detected on " + _Symbol;
+         string body = StringFormat("Time: %s\nTick Volume: %.0f\nAverage(%d): %.2f\nMultiplier: %.1f",
+                                    TimeToString(curBarTime, TIME_DATE|TIME_SECONDS),
+                                    curVol, LookbackBars, avg, VolumeMultiplier);
+         NotifyEvent(subject, body);
+        }
+     }
+  } 
